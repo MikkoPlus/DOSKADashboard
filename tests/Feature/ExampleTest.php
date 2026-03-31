@@ -178,4 +178,85 @@ class ExampleTest extends TestCase
                 && $job->action === 'task.created';
         });
     }
+
+    public function test_task_update_dispatches_activity_log_job(): void
+    {
+        Queue::fake();
+
+        /** @var User $user */
+        $user = User::factory()->create();
+        $workspace = Workspace::createPersonalForUser($user);
+        $token = $user->createToken('test')->plainTextToken;
+
+        $board = Board::query()->create([
+            'workspace_id' => $workspace->id,
+            'name' => 'Board For Update Log',
+            'position' => 1,
+            'is_archived' => false,
+        ]);
+
+        $column = Column::query()->create([
+            'workspace_id' => $workspace->id,
+            'board_id' => $board->id,
+            'name' => 'Todo',
+            'position' => 1,
+        ]);
+
+        $task = Task::query()->create([
+            'workspace_id' => $workspace->id,
+            'board_id' => $board->id,
+            'column_id' => $column->id,
+            'title' => 'Task Before Update',
+            'description' => null,
+            'assignee_id' => $user->id,
+            'due_at' => null,
+            'is_completed' => false,
+            'position' => 1,
+        ]);
+
+        $response = $this
+            ->withToken($token)
+            ->patchJson("/api/v1/tasks/{$task->id}", [
+                'title' => 'Task After Update',
+            ]);
+
+        $response->assertOk();
+
+        Queue::assertPushed(LogActivity::class, function (LogActivity $job) use ($workspace, $user, $task) {
+            return $job->workspaceId === $workspace->id
+                && $job->userId === $user->id
+                && $job->action === 'task.updated'
+                && ($job->metadata['task_id'] ?? null) === $task->id;
+        });
+    }
+
+    public function test_board_archive_dispatches_activity_log_job(): void
+    {
+        Queue::fake();
+
+        /** @var User $user */
+        $user = User::factory()->create();
+        $workspace = Workspace::createPersonalForUser($user);
+        $token = $user->createToken('test')->plainTextToken;
+
+        $board = Board::query()->create([
+            'workspace_id' => $workspace->id,
+            'name' => 'Board For Archive Log',
+            'position' => 1,
+            'is_archived' => false,
+        ]);
+
+        $response = $this
+            ->withToken($token)
+            ->deleteJson("/api/v1/boards/{$board->id}");
+
+        $response->assertOk();
+
+        Queue::assertPushed(LogActivity::class, function (LogActivity $job) use ($workspace, $user, $board) {
+            return $job->workspaceId === $workspace->id
+                && $job->userId === $user->id
+                && $job->action === 'board.archived'
+                && ($job->metadata['board_id'] ?? null) === $board->id;
+        });
+    }
 }

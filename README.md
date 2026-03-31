@@ -1,59 +1,144 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# DOSKA Dashboard API
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Backend для kanban-системы (в стиле Trello) в формате multi-tenant SaaS: рабочие пространства, доски, колонки, задачи, RBAC, Activity Log и очереди.
 
-## About Laravel
+## Стек
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+- Laravel 12
+- PostgreSQL
+- Redis (очереди)
+- Laravel Sanctum
+- Docker / Laravel Sail
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Основные возможности
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+- Multi-tenant изоляция данных по `workspace_id`
+- Роли в workspace: `owner`, `admin`, `member`
+- RBAC через Policies + middleware
+- CRUD API для досок/колонок/задач
+- Перемещение и переупорядочивание (drag & drop) через транзакции и блокировки строк
+- Activity Log в PostgreSQL `JSONB` + GIN индекс
 
-## Learning Laravel
+## Быстрый старт
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+1. Установить зависимости:
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+```bash
+composer install
+```
 
-## Laravel Sponsors
+2. Создать `.env` и сгенерировать ключ приложения:
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+```bash
+cp .env.example .env
+php artisan key:generate
+```
 
-### Premium Partners
+3. Убедиться, что в `.env` указаны настройки PostgreSQL (Sail defaults):
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+```env
+DB_CONNECTION=pgsql
+DB_HOST=pgsql
+DB_PORT=5432
+DB_DATABASE=laravel
+DB_USERNAME=sail
+DB_PASSWORD=password
+```
 
-## Contributing
+4. Поднять контейнеры:
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+```bash
+./vendor/bin/sail up -d
+```
 
-## Code of Conduct
+5. Применить миграции и сгенерировать демо-данные:
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+```bash
+./vendor/bin/sail artisan migrate:fresh --seed
+```
 
-## Security Vulnerabilities
+6. Запустить тесты:
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+```bash
+./vendor/bin/sail artisan test
+```
 
-## License
+## API
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+Базовый префикс: `/api/v1`
+
+### Auth
+
+- `POST /auth/register`
+- `POST /auth/login`
+- `POST /auth/logout` (требуется Sanctum токен)
+
+### Workspaces
+
+- `GET /workspaces`
+- `POST /workspaces`
+- `GET /workspaces/{workspace}`
+
+### Boards
+
+- `GET /workspaces/{workspace}/boards`
+- `GET /boards/{id}`
+- `POST /boards`
+- `DELETE /boards/{id}` (архивирование доски)
+
+### Columns
+
+- `POST /columns`
+- `PATCH /columns/{id}`
+- `DELETE /columns/{id}`
+
+### Tasks
+
+- `POST /tasks`
+- `PATCH /tasks/{id}`
+- `DELETE /tasks/{id}`
+
+## RBAC (роли и доступы)
+
+- `owner`: полный доступ к workspace, управление участниками, удаление/архивирование досок
+- `admin`: управление участниками, удаление/архивирование досок
+- `member`: операции с досками/колонками/задачами, без удаления/архивирования досок
+
+Доступ проверяется через:
+
+- Policies (`WorkspacePolicy`, `BoardPolicy`, `TaskPolicy`)
+- Middleware алиас `current.workspace`
+
+## Activity Log
+
+Действия логируются асинхронно через job `LogActivity` в таблицу `activity_logs`:
+
+- `workspace_id`, `user_id`, `action`, `metadata` (`JSONB`), `created_at`
+
+Индексы:
+
+- `(workspace_id, action)`
+- `GIN (metadata)`
+
+## Очереди
+
+Запуск воркера (пример):
+
+```bash
+./vendor/bin/sail artisan queue:work
+```
+
+## Демо-данные
+
+Seeder создаёт:
+
+- 1 demo user (`demo@example.com`)
+- 1 personal workspace
+- 1 доску
+- 4 колонки
+- 10 задач
+
+## Примечания
+
+- API использует Sanctum токены: `Authorization: Bearer <token>`.
+- Проект ориентирован на PostgreSQL-фичи (`JSONB`, partial indexes, GIN).
