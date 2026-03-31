@@ -43,15 +43,7 @@ class WorkspaceController extends Controller
 
     public function show(Request $request, Workspace $workspace)
     {
-        $user = $request->user();
-
-        $isMember = $workspace->users()
-            ->where('users.id', $user->id)
-            ->exists();
-
-        if (! $isMember) {
-            return response()->json(['message' => 'Forbidden'], 403);
-        }
+        $this->authorize('view', $workspace);
 
         return response()->json($workspace);
     }

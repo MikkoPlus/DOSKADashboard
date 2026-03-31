@@ -37,13 +37,7 @@ class TaskController extends Controller
             return response()->json(['message' => 'Invalid column'], 422);
         }
 
-        $isMember = WorkspaceUser::where('workspace_id', $board->workspace_id)
-            ->where('user_id', $user->id)
-            ->exists();
-
-        if (! $isMember) {
-            return response()->json(['message' => 'Forbidden'], 403);
-        }
+        $this->authorize('create', [Task::class, $board->workspace]);
 
         $isCompleted = (bool) ($validated['is_completed'] ?? false);
 
@@ -82,13 +76,7 @@ class TaskController extends Controller
             return response()->json(['message' => 'Not found'], 404);
         }
 
-        $isMember = WorkspaceUser::where('workspace_id', $task->workspace_id)
-            ->where('user_id', $user->id)
-            ->exists();
-
-        if (! $isMember) {
-            return response()->json(['message' => 'Forbidden'], 403);
-        }
+        $this->authorize('update', $task);
 
         $validated = $request->validate([
             'title' => ['nullable', 'string', 'max:255'],
@@ -261,20 +249,12 @@ class TaskController extends Controller
 
     public function destroy(Request $request, string $id)
     {
-        $user = $request->user();
-
         $task = Task::query()->find($id);
         if (! $task) {
             return response()->json(['message' => 'Not found'], 404);
         }
 
-        $isMember = WorkspaceUser::where('workspace_id', $task->workspace_id)
-            ->where('user_id', $user->id)
-            ->exists();
-
-        if (! $isMember) {
-            return response()->json(['message' => 'Forbidden'], 403);
-        }
+        $this->authorize('delete', $task);
 
         $task->delete();
 

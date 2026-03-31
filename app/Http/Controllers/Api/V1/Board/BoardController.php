@@ -4,23 +4,13 @@ namespace App\Http\Controllers\Api\V1\Board;
 
 use App\Http\Controllers\Controller;
 use App\Models\Board;
-use App\Models\WorkspaceUser;
+use App\Models\Workspace;
 use Illuminate\Http\Request;
 
 class BoardController extends Controller
 {
     public function indexByWorkspace(Request $request, string $workspace)
     {
-        $user = $request->user();
-
-        $isMember = WorkspaceUser::where('workspace_id', $workspace)
-            ->where('user_id', $user->id)
-            ->exists();
-
-        if (! $isMember) {
-            return response()->json(['message' => 'Forbidden'], 403);
-        }
-
         $boards = Board::query()
             ->where('workspace_id', $workspace)
             ->where('is_archived', false)
@@ -32,20 +22,12 @@ class BoardController extends Controller
 
     public function show(Request $request, string $id)
     {
-        $user = $request->user();
-
         $board = Board::query()->find($id);
         if (! $board) {
             return response()->json(['message' => 'Not found'], 404);
         }
 
-        $isMember = WorkspaceUser::where('workspace_id', $board->workspace_id)
-            ->where('user_id', $user->id)
-            ->exists();
-
-        if (! $isMember) {
-            return response()->json(['message' => 'Forbidden'], 403);
-        }
+        $this->authorize('view', $board);
 
         return response()->json($board);
     }
@@ -60,15 +42,9 @@ class BoardController extends Controller
             'position' => ['nullable', 'integer', 'min:0'],
         ]);
 
-        $role = WorkspaceUser::where('workspace_id', $validated['workspace_id'])
-            ->where('user_id', $user->id)
-            ->value('role');
+        $workspace = Workspace::query()->findOrFail($validated['workspace_id']);
 
-        if (! $role) {
-            return response()->json(['message' => 'Forbidden'], 403);
-        }
-
-        // Создание досок разрешено всем ролям из ТЗ.
+        $this->authorize('create', [Board::class, $workspace]);
         $position = $validated['position'] ?? Board::query()
             ->where('workspace_id', $validated['workspace_id'])
             ->max('position');
@@ -86,25 +62,12 @@ class BoardController extends Controller
 
     public function destroy(Request $request, string $id)
     {
-        $user = $request->user();
-
         $board = Board::query()->find($id);
         if (! $board) {
             return response()->json(['message' => 'Not found'], 404);
         }
 
-        $role = WorkspaceUser::where('workspace_id', $board->workspace_id)
-            ->where('user_id', $user->id)
-            ->value('role');
-
-        if (! $role) {
-            return response()->json(['message' => 'Forbidden'], 403);
-        }
-
-        // В ТЗ удаление досок: Owner/Admin ✅, Member ❌
-        if (! in_array($role, ['owner', 'admin'], true)) {
-            return response()->json(['message' => 'Forbidden'], 403);
-        }
+        $this->authorize('delete', $board);
 
         $board->update(['is_archived' => true]);
 
