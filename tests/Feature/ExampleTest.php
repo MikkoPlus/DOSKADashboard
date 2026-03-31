@@ -2,18 +2,138 @@
 
 namespace Tests\Feature;
 
-// use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Models\Board;
+use App\Models\Column;
+use App\Models\Task;
+use App\Models\User;
+use App\Models\Workspace;
+use App\Models\WorkspaceUser;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class ExampleTest extends TestCase
 {
-    /**
-     * A basic test example.
-     */
-    public function test_the_application_returns_a_successful_response(): void
-    {
-        $response = $this->get('/');
+    use RefreshDatabase;
 
-        $response->assertStatus(200);
+    public function test_user_can_register_and_get_personal_workspace(): void
+    {
+        $response = $this->postJson('/api/v1/auth/register', [
+            'name' => 'Api User',
+            'email' => 'api_user@example.com',
+            'password' => 'password',
+        ]);
+
+        $response
+            ->assertCreated()
+            ->assertJsonStructure([
+                'user' => ['id', 'name', 'email'],
+                'token',
+                'workspace' => ['id', 'name', 'type'],
+            ]);
+
+        $userId = $response->json('user.id');
+        $workspaceId = $response->json('workspace.id');
+
+        $this->assertNotNull($userId);
+        $this->assertNotNull($workspaceId);
+
+        $workspace = Workspace::query()->find($workspaceId);
+
+        $this->assertNotNull($workspace);
+        $this->assertSame('personal', $workspace->type);
+
+        $pivot = WorkspaceUser::query()
+            ->where('workspace_id', $workspaceId)
+            ->where('user_id', $userId)
+            ->first();
+
+        $this->assertNotNull($pivot);
+        $this->assertSame('owner', $pivot->role);
+    }
+
+    public function test_authenticated_user_can_list_own_workspaces(): void
+    {
+        /** @var User $user */
+        $user = User::factory()->create();
+        $workspace = Workspace::createPersonalForUser($user);
+
+        $token = $user->createToken('test')->plainTextToken;
+
+        $response = $this
+            ->withToken($token)
+            ->getJson('/api/v1/workspaces');
+
+        $response
+            ->assertOk()
+            ->assertJsonFragment(['id' => $workspace->id]);
+    }
+
+    public function test_user_cannot_access_foreign_workspace(): void
+    {
+        /** @var User $owner */
+        $owner = User::factory()->create();
+        $workspace = Workspace::createPersonalForUser($owner);
+
+        /** @var User $other */
+        $other = User::factory()->create();
+        $token = $other->createToken('test')->plainTextToken;
+
+        $response = $this
+            ->withToken($token)
+            ->getJson("/api/v1/workspaces/{$workspace->id}");
+
+        $response->assertForbidden();
+    }
+
+    public function test_user_can_create_board_column_and_task_via_api(): void
+    {
+        /** @var User $user */
+        $user = User::factory()->create();
+        $workspace = Workspace::createPersonalForUser($user);
+        $token = $user->createToken('test')->plainTextToken;
+
+        // Board
+        $boardResponse = $this
+            ->withToken($token)
+            ->postJson('/api/v1/boards', [
+                'workspace_id' => $workspace->id,
+                'name' => 'API Board',
+            ]);
+
+        $boardResponse->assertCreated();
+        $boardId = $boardResponse->json('id');
+
+        $board = Board::query()->find($boardId);
+        $this->assertNotNull($board);
+
+        // Column
+        $columnResponse = $this
+            ->withToken($token)
+            ->postJson('/api/v1/columns', [
+                'board_id' => $boardId,
+                'name' => 'API Column',
+            ]);
+
+        $columnResponse->assertCreated();
+        $columnId = $columnResponse->json('id');
+
+        $column = Column::query()->find($columnId);
+        $this->assertNotNull($column);
+
+        // Task
+        $taskResponse = $this
+            ->withToken($token)
+            ->postJson('/api/v1/tasks', [
+                'board_id' => $boardId,
+                'column_id' => $columnId,
+                'title' => 'API Task',
+            ]);
+
+        $taskResponse->assertCreated();
+        $taskId = $taskResponse->json('id');
+
+        $task = Task::query()->find($taskId);
+        $this->assertNotNull($task);
+        $this->assertSame('API Task', $task->title);
     }
 }

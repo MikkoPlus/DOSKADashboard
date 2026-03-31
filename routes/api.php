@@ -4,6 +4,9 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\V1\Auth\RegisterController;
 use App\Http\Controllers\Api\V1\Auth\LoginController;
 use App\Http\Controllers\Api\V1\Auth\LogoutController;
+use App\Http\Controllers\Api\V1\Board\BoardController;
+use App\Http\Controllers\Api\V1\Column\ColumnController;
+use App\Http\Controllers\Api\V1\Task\TaskController;
 use App\Http\Controllers\Api\V1\Workspace\WorkspaceController;
 
 Route::prefix('v1')->group(function () {
@@ -17,6 +20,22 @@ Route::prefix('v1')->group(function () {
         Route::get('workspaces', [WorkspaceController::class, 'index'])->name('api.v1.workspaces.index');
         Route::post('workspaces', [WorkspaceController::class, 'store'])->name('api.v1.workspaces.store');
         Route::get('workspaces/{workspace}', [WorkspaceController::class, 'show'])->name('api.v1.workspaces.show');
+
+        // Boards
+        Route::get('workspaces/{workspace}/boards', [BoardController::class, 'indexByWorkspace']);
+        Route::get('boards/{id}', [BoardController::class, 'show']);
+        Route::post('boards', [BoardController::class, 'store']);
+        Route::delete('boards/{id}', [BoardController::class, 'destroy']);
+
+        // Columns
+        Route::post('columns', [ColumnController::class, 'store']);
+        Route::patch('columns/{id}', [ColumnController::class, 'update']);
+        Route::delete('columns/{id}', [ColumnController::class, 'destroy']);
+
+        // Tasks
+        Route::post('tasks', [TaskController::class, 'store']);
+        Route::patch('tasks/{id}', [TaskController::class, 'update']);
+        Route::delete('tasks/{id}', [TaskController::class, 'destroy']);
     });
 });
 

@@ -24,13 +24,6 @@ return new class extends Migration
             $table->index(['owner_id', 'type']);
         });
 
-        // CHECK constraint for type
-        DB::statement("
-            ALTER TABLE workspaces
-            ADD CONSTRAINT workspaces_type_check
-            CHECK (type IN ('personal', 'team'))
-        ");
-
         // Partial index: один personal workspace на пользователя
         DB::statement("
             CREATE UNIQUE INDEX workspaces_owner_personal_unique
@@ -42,7 +35,6 @@ return new class extends Migration
     public function down(): void
     {
         DB::statement('DROP INDEX IF EXISTS workspaces_owner_personal_unique');
-        DB::statement('ALTER TABLE workspaces DROP CONSTRAINT IF EXISTS workspaces_type_check');
 
         Schema::dropIfExists('workspaces');
     }
