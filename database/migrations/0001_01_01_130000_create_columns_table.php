@@ -1,0 +1,39 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('columns', function (Blueprint $table) {
+            $table->uuid('id')->primary();
+            $table->uuid('workspace_id');
+            $table->uuid('board_id');
+            $table->string('name');
+            $table->unsignedInteger('position')->default(0);
+            $table->timestamps();
+
+            $table->foreign('workspace_id')
+                ->references('id')
+                ->on('workspaces')
+                ->cascadeOnDelete();
+
+            $table->foreign('board_id')
+                ->references('id')
+                ->on('boards')
+                ->cascadeOnDelete();
+
+            $table->unique(['board_id', 'position']);
+            $table->index(['workspace_id', 'board_id']);
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('columns');
+    }
+};
+
