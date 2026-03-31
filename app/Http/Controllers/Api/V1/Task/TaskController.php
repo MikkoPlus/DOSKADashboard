@@ -5,8 +5,8 @@ namespace App\Http\Controllers\Api\V1\Task;
 use App\Http\Controllers\Controller;
 use App\Models\Column;
 use App\Models\Task;
-use App\Models\WorkspaceUser;
 use App\Models\Board;
+use App\Jobs\LogActivity;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -64,13 +64,23 @@ class TaskController extends Controller
             'position' => (int) $position,
         ]);
 
+        LogActivity::dispatch(
+            workspaceId: $task->workspace_id,
+            userId: $user->id,
+            action: 'task.created',
+            metadata: [
+                'task_id' => $task->id,
+                'board_id' => $task->board_id,
+                'column_id' => $task->column_id,
+                'title' => $task->title,
+            ],
+        );
+
         return response()->json($task, 201);
     }
 
     public function update(Request $request, string $id)
     {
-        $user = $request->user();
-
         $task = Task::query()->find($id);
         if (! $task) {
             return response()->json(['message' => 'Not found'], 404);
@@ -88,7 +98,7 @@ class TaskController extends Controller
             'position' => ['nullable', 'integer', 'min:0'],
         ]);
 
-        return DB::transaction(function () use ($task, $validated, $id) {
+        return DB::transaction(function () use ($task, $validated, $id, $request) {
             // Берем сам таск через lockForUpdate для корректной конкурентности при drag & drop.
             /** @var Task $taskLocked */
             $taskLocked = Task::query()
@@ -243,6 +253,19 @@ class TaskController extends Controller
 
             $taskLocked->save();
 
+            LogActivity::dispatch(
+                workspaceId: $taskLocked->workspace_id,
+                userId: $request->user()?->id,
+                action: 'task.updated',
+                metadata: [
+                    'task_id' => $taskLocked->id,
+                    'board_id' => $taskLocked->board_id,
+                    'column_id' => $taskLocked->column_id,
+                    'title' => $taskLocked->title,
+                    'is_completed' => $taskLocked->is_completed,
+                ],
+            );
+
             return response()->json($taskLocked);
         });
     }
@@ -255,6 +278,18 @@ class TaskController extends Controller
         }
 
         $this->authorize('delete', $task);
+
+        LogActivity::dispatch(
+            workspaceId: $task->workspace_id,
+            userId: $request->user()?->id,
+            action: 'task.deleted',
+            metadata: [
+                'task_id' => $task->id,
+                'board_id' => $task->board_id,
+                'column_id' => $task->column_id,
+                'title' => $task->title,
+            ],
+        );
 
         $task->delete();
 

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1\Board;
 use App\Http\Controllers\Controller;
 use App\Models\Board;
 use App\Models\Workspace;
+use App\Jobs\LogActivity;
 use Illuminate\Http\Request;
 
 class BoardController extends Controller
@@ -57,6 +58,16 @@ class BoardController extends Controller
             'is_archived' => false,
         ]);
 
+        LogActivity::dispatch(
+            workspaceId: $workspace->id,
+            userId: $user->id,
+            action: 'board.created',
+            metadata: [
+                'board_id' => $board->id,
+                'name' => $board->name,
+            ],
+        );
+
         return response()->json($board, 201);
     }
 
@@ -70,6 +81,16 @@ class BoardController extends Controller
         $this->authorize('delete', $board);
 
         $board->update(['is_archived' => true]);
+
+        LogActivity::dispatch(
+            workspaceId: $board->workspace_id,
+            userId: $request->user()?->id,
+            action: 'board.archived',
+            metadata: [
+                'board_id' => $board->id,
+                'name' => $board->name,
+            ],
+        );
 
         return response()->json(['message' => 'Board archived']);
     }

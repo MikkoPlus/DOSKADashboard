@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\LogActivity;
 use App\Models\Board;
 use App\Models\Column;
 use App\Models\Task;
@@ -9,6 +10,7 @@ use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceUser;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 class ExampleTest extends TestCase
@@ -135,5 +137,45 @@ class ExampleTest extends TestCase
         $task = Task::query()->find($taskId);
         $this->assertNotNull($task);
         $this->assertSame('API Task', $task->title);
+    }
+
+    public function test_task_creation_dispatches_activity_log_job(): void
+    {
+        Queue::fake();
+
+        /** @var User $user */
+        $user = User::factory()->create();
+        $workspace = Workspace::createPersonalForUser($user);
+        $token = $user->createToken('test')->plainTextToken;
+
+        $board = Board::query()->create([
+            'workspace_id' => $workspace->id,
+            'name' => 'Board For Logging',
+            'position' => 1,
+            'is_archived' => false,
+        ]);
+
+        $column = Column::query()->create([
+            'workspace_id' => $workspace->id,
+            'board_id' => $board->id,
+            'name' => 'Todo',
+            'position' => 1,
+        ]);
+
+        $response = $this
+            ->withToken($token)
+            ->postJson('/api/v1/tasks', [
+                'board_id' => $board->id,
+                'column_id' => $column->id,
+                'title' => 'Task with logging',
+            ]);
+
+        $response->assertCreated();
+
+        Queue::assertPushed(LogActivity::class, function (LogActivity $job) use ($workspace, $user) {
+            return $job->workspaceId === $workspace->id
+                && $job->userId === $user->id
+                && $job->action === 'task.created';
+        });
     }
 }
