@@ -9,6 +9,7 @@ use App\Models\Board;
 use App\Jobs\LogActivity;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class TaskController extends Controller
 {
@@ -38,8 +39,13 @@ class TaskController extends Controller
             'column_id' => ['required', 'uuid', 'exists:columns,id'],
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
+            'priority' => ['nullable', 'string', 'in:low,normal,high,urgent'],
+            'checklist' => ['nullable', 'array', 'max:200'],
+            'checklist.*.id' => ['nullable', 'string', 'max:64'],
+            'checklist.*.title' => ['nullable', 'string', 'max:500'],
+            'checklist.*.done' => ['nullable', 'boolean'],
             'assignee_id' => ['nullable', 'uuid', 'exists:users,id'],
-            'due_at' => ['nullable', 'date'],
+            'due_at' => ['nullable', 'date', 'after_or_equal:today'],
             'position' => ['nullable', 'integer', 'min:0'],
             'is_completed' => ['nullable', 'boolean'],
         ]);
@@ -69,12 +75,18 @@ class TaskController extends Controller
             $position = ($position ?? 0) + 1;
         }
 
+        $checklist = array_key_exists('checklist', $validated)
+            ? $this->normalizeChecklist($validated['checklist'])
+            : null;
+
         $task = Task::query()->create([
             'workspace_id' => $board->workspace_id,
             'board_id' => $board->id,
             'column_id' => $column->id,
             'title' => $validated['title'],
             'description' => $validated['description'] ?? null,
+            'priority' => $validated['priority'] ?? 'normal',
+            'checklist' => $checklist,
             'assignee_id' => $validated['assignee_id'] ?? null,
             'due_at' => $validated['due_at'] ?? null,
             'is_completed' => $isCompleted,
@@ -108,8 +120,13 @@ class TaskController extends Controller
         $validated = $request->validate([
             'title' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
+            'priority' => ['nullable', 'string', 'in:low,normal,high,urgent'],
+            'checklist' => ['nullable', 'array', 'max:200'],
+            'checklist.*.id' => ['nullable', 'string', 'max:64'],
+            'checklist.*.title' => ['nullable', 'string', 'max:500'],
+            'checklist.*.done' => ['nullable', 'boolean'],
             'assignee_id' => ['nullable', 'uuid', 'exists:users,id'],
-            'due_at' => ['nullable', 'date'],
+            'due_at' => ['nullable', 'date', 'after_or_equal:today'],
             'is_completed' => ['nullable', 'boolean'],
             'column_id' => ['nullable', 'uuid', 'exists:columns,id'],
             'position' => ['nullable', 'integer', 'min:0'],
@@ -245,6 +262,12 @@ class TaskController extends Controller
             if (array_key_exists('description', $validated)) {
                 $taskLocked->description = $validated['description'];
             }
+            if (array_key_exists('priority', $validated) && $validated['priority'] !== null) {
+                $taskLocked->priority = $validated['priority'];
+            }
+            if (array_key_exists('checklist', $validated)) {
+                $taskLocked->checklist = $this->normalizeChecklist($validated['checklist']);
+            }
             if (array_key_exists('assignee_id', $validated)) {
                 $taskLocked->assignee_id = $validated['assignee_id'];
             }
@@ -311,6 +334,35 @@ class TaskController extends Controller
         $task->delete();
 
         return response()->json(['message' => 'Task deleted']);
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>|null  $input
+     * @return array<int, array{id: string, title: string, done: bool}>|null
+     */
+    protected function normalizeChecklist(?array $input): ?array
+    {
+        if ($input === null) {
+            return null;
+        }
+
+        $out = [];
+        foreach ($input as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+            $title = isset($item['title']) ? trim((string) $item['title']) : '';
+            if ($title === '') {
+                continue;
+            }
+            $out[] = [
+                'id' => ! empty($item['id']) ? (string) $item['id'] : (string) Str::uuid(),
+                'title' => $title,
+                'done' => ! empty($item['done']),
+            ];
+        }
+
+        return $out;
     }
 }
 

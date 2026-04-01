@@ -6,7 +6,6 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Task extends Model
 {
@@ -18,6 +17,8 @@ class Task extends Model
         'column_id',
         'title',
         'description',
+        'priority',
+        'checklist',
         'assignee_id',
         'due_at',
         'is_completed',
@@ -27,6 +28,7 @@ class Task extends Model
     protected $casts = [
         'due_at' => 'datetime',
         'is_completed' => 'boolean',
+        'checklist' => 'array',
     ];
 
     public function column(): BelongsTo
