@@ -30,3 +30,7 @@ export async function reorderColumns(boardId: string, columnIds: string[]) {
   return data;
 }
 
+export async function deleteColumn(id: string) {
+  await api.delete(`/columns/${id}`);
+}
+

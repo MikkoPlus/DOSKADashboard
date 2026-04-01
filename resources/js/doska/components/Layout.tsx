@@ -1,15 +1,25 @@
 import React from 'react';
-import { Link, Outlet, useNavigate } from 'react-router-dom';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { logout } from '../api/auth';
+
+/** Страница канбан-доски — на всю ширину окна с полями по краям */
+function useBoardCanvasLayout(): boolean {
+  const { pathname } = useLocation();
+  return /\/workspaces\/[^/]+\/boards\/[^/]+$/.test(pathname);
+}
 
 export function Layout() {
   const navigate = useNavigate();
   const token = localStorage.getItem('doska_token');
+  const boardCanvas = useBoardCanvasLayout();
+  const shellClass = boardCanvas
+    ? 'mx-auto w-full max-w-none px-4 sm:px-6 lg:px-8'
+    : 'mx-auto max-w-5xl px-4';
 
   return (
-    <div className="min-h-screen">
-      <header className="border-b border-zinc-800">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
+    <div className={boardCanvas ? 'flex min-h-screen flex-1 flex-col' : 'min-h-screen'}>
+      <header className="shrink-0 border-b border-zinc-800">
+        <div className={`flex items-center justify-between py-3 ${shellClass}`}>
           <div className="flex items-center gap-3">
             <Link to="/workspaces" className="font-semibold tracking-wide">
               DOSKA
@@ -23,7 +33,7 @@ export function Layout() {
                 <Link className="text-zinc-200 hover:text-white" to="/login">
                   Вход
                 </Link>
-                <Link className="rounded bg-white px-3 py-1.5 text-zinc-950 hover:bg-zinc-200" to="/register">
+                <Link className="btn-accent-sm inline-flex items-center no-underline" to="/register">
                   Регистрация
                 </Link>
               </>
@@ -46,7 +56,9 @@ export function Layout() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl px-4 py-8">
+      <main
+        className={`py-6 sm:py-8 ${shellClass} ${boardCanvas ? 'flex min-h-0 flex-1 flex-col' : ''}`}
+      >
         <Outlet />
       </main>
     </div>
