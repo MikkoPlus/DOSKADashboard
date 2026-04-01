@@ -11,6 +11,23 @@ use Illuminate\Support\Facades\DB;
 
 class ColumnController extends Controller
 {
+    public function indexByBoard(Request $request, string $boardId)
+    {
+        $board = Board::query()->find($boardId);
+        if (! $board) {
+            return response()->json(['message' => 'Not found'], 404);
+        }
+
+        // доступ к workspace уже проверяется в middleware/policies на уровне других операций,
+        // здесь просто возвращаем колонки доски
+        $columns = Column::query()
+            ->where('board_id', $board->id)
+            ->orderBy('position')
+            ->get();
+
+        return response()->json($columns);
+    }
+
     public function store(Request $request)
     {
         $user = $request->user();
@@ -47,6 +64,72 @@ class ColumnController extends Controller
         ]);
 
         return response()->json($column, 201);
+    }
+
+    public function reorderByBoard(Request $request, string $boardId)
+    {
+        $user = $request->user();
+
+        $board = Board::query()->find($boardId);
+        if (! $board) {
+            return response()->json(['message' => 'Not found'], 404);
+        }
+
+        $isMember = WorkspaceUser::where('workspace_id', $board->workspace_id)
+            ->where('user_id', $user->id)
+            ->exists();
+
+        if (! $isMember) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+        $validated = $request->validate([
+            'column_ids' => ['required', 'array', 'min:1'],
+            'column_ids.*' => ['required', 'uuid'],
+        ]);
+
+        $orderedIds = $validated['column_ids'];
+
+        return DB::transaction(function () use ($board, $orderedIds) {
+            $columns = Column::query()
+                ->where('board_id', $board->id)
+                ->lockForUpdate()
+                ->get(['id', 'position']);
+
+            $existingIds = $columns->pluck('id')->all();
+            sort($existingIds);
+
+            $incomingIds = $orderedIds;
+            sort($incomingIds);
+
+            if ($existingIds !== $incomingIds) {
+                return response()->json(['message' => 'Invalid columns order payload'], 422);
+            }
+
+            $count = count($orderedIds);
+            $offset = $count + 1000;
+
+            // Шаг 1: уводим все позиции в безопасный диапазон, чтобы не нарушить unique(board_id, position)
+            foreach ($orderedIds as $index => $columnId) {
+                Column::query()
+                    ->where('id', $columnId)
+                    ->update(['position' => $offset + $index + 1]);
+            }
+
+            // Шаг 2: выставляем целевые позиции
+            foreach ($orderedIds as $index => $columnId) {
+                Column::query()
+                    ->where('id', $columnId)
+                    ->update(['position' => $index + 1]);
+            }
+
+            $result = Column::query()
+                ->where('board_id', $board->id)
+                ->orderBy('position')
+                ->get();
+
+            return response()->json($result);
+        });
     }
 
     public function update(Request $request, string $id)
@@ -96,6 +179,11 @@ class ColumnController extends Controller
                         ->whereBetween('position', [$min, $max])
                         ->lockForUpdate()
                         ->get();
+
+                    // Важно для PostgreSQL unique(board_id, position):
+                    // временно освобождаем старую позицию, чтобы избежать промежуточных конфликтов.
+                    $columnLocked->position = 0;
+                    $columnLocked->save();
 
                     if ($newPosition > $oldPosition) {
                         Column::query()

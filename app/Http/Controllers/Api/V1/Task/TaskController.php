@@ -12,6 +12,23 @@ use Illuminate\Support\Facades\DB;
 
 class TaskController extends Controller
 {
+    public function indexByBoard(Request $request, string $boardId)
+    {
+        $board = Board::query()->find($boardId);
+        if (! $board) {
+            return response()->json(['message' => 'Not found'], 404);
+        }
+
+        // Вернём задачи доски, отсортированные по колонке и позиции
+        $tasks = Task::query()
+            ->where('board_id', $board->id)
+            ->orderBy('column_id')
+            ->orderBy('position')
+            ->get();
+
+        return response()->json($tasks);
+    }
+
     public function store(Request $request)
     {
         $user = $request->user();

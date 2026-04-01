@@ -29,11 +29,14 @@ Route::prefix('v1')->group(function () {
             Route::delete('boards/{id}', [BoardController::class, 'destroy']);
 
             // Columns
+            Route::get('boards/{board}/columns', [ColumnController::class, 'indexByBoard']);
+            Route::patch('boards/{board}/columns/reorder', [ColumnController::class, 'reorderByBoard']);
             Route::post('columns', [ColumnController::class, 'store']);
             Route::patch('columns/{id}', [ColumnController::class, 'update']);
             Route::delete('columns/{id}', [ColumnController::class, 'destroy']);
 
             // Tasks
+            Route::get('boards/{board}/tasks', [TaskController::class, 'indexByBoard']);
             Route::post('tasks', [TaskController::class, 'store']);
             Route::patch('tasks/{id}', [TaskController::class, 'update']);
             Route::delete('tasks/{id}', [TaskController::class, 'destroy']);
